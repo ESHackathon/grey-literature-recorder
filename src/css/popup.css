@@ -1,0 +1,44 @@
+html, body {
+    margin: 0;
+    padding: 0;
+}
+
+.menu {
+    border: 0;
+    color: #000000;
+    font-size: 14px;
+    margin: 0;
+    padding: 0;
+    min-width: 400px;
+}
+
+.menu .menu-item,
+.menu .menu-header {
+    background: #FFFFFF;
+    border: 0;
+    border-top: 1px solid #E7E8EA;
+    margin: 0;
+    padding: 18px 21px;
+}
+
+.menu .menu-item img,
+.menu .menu-header img {
+    margin-right: 12px;
+    vertical-align: middle;
+}
+
+.menu .menu-header {
+    color: #000000;
+    font-size: 16px;
+    font-weight: bold;
+    background: #FFFFFF;
+}
+
+.menu .menu-item:first-child {
+    border-top: 0;
+}
+
+.menu .menu-item:hover {
+    background: #F7F9FA;
+    cursor: pointer;
+}

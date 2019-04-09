@@ -1,0 +1,45 @@
+{
+  "name": "Grey Literature Search Recorder",
+  "description": "Normalizes search results and transparency of grey literature searches.",
+  "version": "0.1",
+  "manifest_version": 2,
+  "background": {
+    "scripts": [
+      "js/background.js"
+    ],
+    "persistent": false
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "css": ["css/content.css"],
+      "js": ["js/content.js"],
+      "run_at": "document_end",
+      "all_frames": true
+    }
+  ],
+  "icons": {
+    "16": "img/logo_16x16.png",
+    "32": "img/logo_32x32.png",
+    "48": "img/logo_48x48.png",
+    "128": "img/logo_128x128.png"
+  },
+  "browser_action": {
+    "default_name": "Start Recording Session",
+    "default_icon": "img/logo_16x16.png"
+  },
+  "web_accessible_resources": [
+    "css/app.css",
+    "js/app.js",
+    "views/app.html"
+  ],
+  "permissions": [
+    "activeTab",
+    "declarativeContent",
+    "storage"
+  ],
+  "content_security_policy": "script-src 'self' https://www.gstatic.com/; object-src 'self'"
+}
