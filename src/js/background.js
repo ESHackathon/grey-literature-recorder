@@ -6,9 +6,7 @@
  * extension or deactivates it.
  */
 chrome.browserAction.onClicked.addListener(function(tab) {
-    let message = {
-        type: 'RECORDING'
-    }
-
-    chrome.tabs.sendMessage(tab.id, message);
+    chrome.tabs.sendMessage(tab.id, {
+        type: 'RECORDING_START_STOP'
+    });
 });

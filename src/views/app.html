@@ -1,13 +1,23 @@
 <html>
     <head>
+        <link rel="stylesheet" href="../css/buttons.css">
         <link rel="stylesheet" href="../css/app.css">
     </head>
     <body>
         <div class="title">
+            <img class="icon-record" src="../img/icon_record.svg" alt="Recording...">
             Grey Literature Search Recorder
+            <img id="btnClose" class="icon-close" src="../img/icon_close.svg" alt="Close Recorder">
         </div>
-        <div id="stepMessage" class="step-message">
-            Select the first element from the list of results.
+        <div class="step">
+            <div id="stepNo" name="stepNo" class="step-number">1</div>
+            <div id="stepText" name="stepText" class="step-text">
+                Select the first element from the list of results.
+            </div>
+        </div>
+        <div class="actions">
+            <button type="button" id="btnAnnotationsDone" class="crx_glsr_btn btn btn-primary">Annotations Done</button>
+            <button type="button" id="btnExport" class="btn btn-primary">Export</button>
         </div>
         <script type="text/javascript" src="../js/app.js"></script>
     </body>

@@ -1,14 +1,21 @@
 'use strict'
 
 const IFRAME_ID = 'crx_glsr_ui';
+const CLOSE_BTN_ID = 'crx_glsr_close';
+const CLOSE_BTN_IMG_ID = 'crx_glsr_close_img';
+const CLOSE_BTN_CLASSNAME = 'crx_glsr_close';
 const VEIL_CLASSNAME = 'crx_glsr_veil';
 const MOUSE_HOVERED_CLASSNAME = 'crx_glsr_hovered';
 const MOUSE_SELECTED_CLASSNAME = 'crx_glsr_selected';
 const MOUSE_SELECTED_ALT_CLASSNAME = 'crx_glsr_selected_alt';
+const ANNOTATE_HOVERED_CLASSNAME = 'crx_glsr_annotate_hovered';
+const ANNOTATED_CLASSNAME = 'crx_glsr_annotated';
 
 let selectedElement = null;
+let annotations = [];
 let frameUI = null;
 let isRecording = false;
+let isConfirming = false;
 
 
 /**
@@ -29,6 +36,9 @@ function removeClass(className) {
  * Clear the current selection.
  */
 function clearSelections() {
+    selectedElement = null;
+    annotations = [];
+
     // Remove all hovered classes.
     removeClass(MOUSE_HOVERED_CLASSNAME);
 
@@ -67,13 +77,13 @@ function highlightSimilarElements() {
 
 
 function showUI() {
-    const url = chrome.runtime.getURL('../views/app.html');
+    const appUrl = chrome.runtime.getURL('../views/app.html');
 
     frameUI = document.createElement("iframe");
     frameUI.id = IFRAME_ID;
     frameUI.name = IFRAME_ID;
-    frameUI.src = url;
-    frameUI.style = "position: fixed; user-select: none; top: 12px; right: 12px; bottom: initial; left: initial; width: 320px; height: 400px; border: 0px; z-index: 2147483646; clip: auto; display: block !important;"
+    frameUI.src = appUrl;
+    frameUI.style = "position: fixed; user-select: none; top: 12px; right: 12px; bottom: initial; left: initial; width: 320px; height: 194px; border: 0px; z-index: 2147483646; clip: auto; display: block !important;"
     document.body.appendChild(frameUI);
 }
 
@@ -87,8 +97,31 @@ function hideUI() {
 }
 
 
+function selectBaseElement(e) {
+    removeClass(MOUSE_SELECTED_CLASSNAME);
+
+    if (e.target.className.trim().length === 0) {
+        alert('Selected item has no "id" or "classes" to distinguished ' +
+            'it. It cannot be selected.');
+        clearSelections();
+        return;
+    }
+
+    selectedElement = e.target;
+    selectedElement.classList.remove(MOUSE_HOVERED_CLASSNAME);
+    selectedElement.classList.add(MOUSE_SELECTED_CLASSNAME);
+
+    chrome.runtime.sendMessage( {
+        type: 'STEP_NEXT'
+    });
+
+    showVeil();
+}
+
 function showVeil() {
+    const closeBtnUrl = chrome.runtime.getURL('../img/icon_close.svg');
     const outline = 3;
+    const closeSize = 14;
     const rect = selectedElement.getBoundingClientRect();
 
     const veilTop = document.createElement('div');
@@ -107,6 +140,21 @@ function showVeil() {
     veilLeft.classList.add(VEIL_CLASSNAME);
     veilLeft.style = 'top: 0; bottom: 0; left: 0; width: ' + (rect.left - outline) + 'px;';
 
+    const closeBtnImg = document.createElement('img')
+    closeBtnImg.id = CLOSE_BTN_IMG_ID;
+    closeBtnImg.name = CLOSE_BTN_IMG_ID;
+    closeBtnImg.src = closeBtnUrl;
+    closeBtnImg.width = 18;
+    closeBtnImg.height = 18;
+
+    const closeBtn = document.createElement('div');
+    closeBtn.classList.add(CLOSE_BTN_CLASSNAME);
+    closeBtn.id = CLOSE_BTN_ID;
+    closeBtn.name = CLOSE_BTN_ID;
+    closeBtn.style = 'top: ' + (rect.top - closeSize) + 'px; left: ' + (rect.left + (rect.width / 2) - closeSize) + 'px;';
+    closeBtn.appendChild(closeBtnImg);
+
+    document.body.appendChild(closeBtn);
     document.body.appendChild(veilTop);
     document.body.appendChild(veilRight);
     document.body.appendChild(veilBottom);
@@ -115,23 +163,40 @@ function showVeil() {
 
 
 function hideVeil() {
+    removeClass(CLOSE_BTN_CLASSNAME);
     removeClass(VEIL_CLASSNAME);
+}
+
+
+function showExport() {
+    hideVeil();
+    clearSelections();
+    hideUI();
+
+    const exprtUrl = chrome.runtime.getURL('../img/export.jpg');
+
+    const exportImg = document.createElement('img');
+    exportImg.classList.add('export-img');
+    exportImg.src = exprtUrl;
+
+    document.body.appendChild(exportImg);
 }
 
 /**
  * Highlights the current div that the mouse pointer is hovering over.
  */
 document.addEventListener('mousemove', function (e) {
-    if (!isRecording || selectedElement !== null) {
+    if (!isRecording  || isConfirming || e.target.classList.contains(VEIL_CLASSNAME)) {
         return;
     }
 
-    // For NPE checking, we check safely. We need to remove the class name
-    // Since we will be styling the new one after.
-    removeClass(MOUSE_HOVERED_CLASSNAME);
-
-    // Add a hovered class name to the element. So we can style it.
-    e.target.classList.add(MOUSE_HOVERED_CLASSNAME);
+    if (selectedElement === null) {
+        removeClass(MOUSE_HOVERED_CLASSNAME);
+        e.target.classList.add(MOUSE_HOVERED_CLASSNAME);
+    } else {
+        removeClass(ANNOTATED_CLASSNAME);
+        e.target.classList.add(ANNOTATED_CLASSNAME);
+    }
 }, false);
 
 
@@ -143,33 +208,38 @@ document.addEventListener('click', function (e) {
         return;
     }
 
-    if (selectedElement !== null) {
+    // Check if the user is removing their selection. If they are,
+    // clear the page and go back a step.
+    if (e.target.id === CLOSE_BTN_ID || e.target.id === CLOSE_BTN_IMG_ID) {
         hideVeil();
-        highlightSimilarElements();
+        clearSelections();
         chrome.runtime.sendMessage( {
-            type: 'ANNOTATED'
+            type: 'STEP_PREV'
         });
         return;
     }
 
-    removeClass(MOUSE_SELECTED_CLASSNAME);
+    if (selectedElement === null) {
+        selectBaseElement(e);
+    } else {
+        if (e.target.classList.contains(VEIL_CLASSNAME)) {
+            return;
+        }
 
-    if (e.target.className.trim().length === 0) {
-        alert('Selected item has no "id" or "classes" to distinguished ' +
-            'it. It cannot be selected.');
-        clearSelections();
-        return;
+        const title = window.prompt('Title', '');
+
+        if (title === null || title.trim().length === 0) {
+            return;
+        }
+
+        annotations.push({
+            title: title,
+            className: e.target.className,
+            id: e.target.id
+        });
+        e.target.classList.add(ANNOTATE_HOVERED_CLASSNAME);
+        console.table(annotations);
     }
-
-    selectedElement = e.target;
-    selectedElement.classList.remove(MOUSE_HOVERED_CLASSNAME);
-    selectedElement.classList.add(MOUSE_SELECTED_CLASSNAME);
-
-    chrome.runtime.sendMessage( {
-        type: 'SELECTED'
-    });
-
-    showVeil();
 });
 
 
@@ -178,17 +248,33 @@ document.addEventListener('click', function (e) {
  * it.
  */
 chrome.runtime.onMessage.addListener(function(request) {
-    if (request.type !== 'RECORDING') {
-        return;
-    }
+    console.log(request.type);
 
-    isRecording = !isRecording;
-    clearSelections();
+    switch (request.type) {
+        case 'RECORDING_START_STOP':
+            isRecording = !isRecording;
+            clearSelections();
+            isRecording ? showUI() : hideUI();
+            console.log('isRecording', isRecording);
+            break;
 
-    if (isRecording) {
-        showUI();
-    } else {
-        hideUI();
+        case 'RECORDING_CANCEL':
+            hideVeil();
+            clearSelections();
+            hideUI();
+            break;
+
+        case 'STEP_CONFIRM':
+            if (selectedElement !== null) {
+                hideVeil();
+                highlightSimilarElements();
+                isConfirming = true;
+            }
+            break;
+
+        case 'STEP_EXPORT':
+            showExport()
+            break;
     }
 });
 

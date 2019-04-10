@@ -33,6 +33,9 @@
   },
   "web_accessible_resources": [
     "css/app.css",
+    "css/buttons.css",
+    "img/export.jpg",
+    "img/icon_close.svg",
     "js/app.js",
     "views/app.html"
   ],

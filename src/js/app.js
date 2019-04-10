@@ -1,18 +1,52 @@
 'use strict'
 
-const stepMessage = document.getElementById('stepMessage');
+const STEP_SELECT_ELEMENT = 1;
+const STEP_ANNOTATE = 2;
+const STEP_CONFIRM = 3;
+const STEPS = {}
+
+STEPS[STEP_SELECT_ELEMENT] = 'Select the first element from the list of results.';
+STEPS[STEP_ANNOTATE] = 'Click on elements within your selected item to annotate them.';
+STEPS[STEP_CONFIRM] = 'Check correct items have been matched?';
+
+const stepNoElement = document.getElementById('stepNo');
+const stepTextElement = document.getElementById('stepText');
+
+let currentStep = 1;
 
 
-function updateStepMessage(message) {
-    stepMessage.innerText = message;
+/**
+ * Shows and hides actions depending on the current step that we are on.
+ */
+function showActions() {
+    document.getElementById('btnAnnotationsDone').style.display = 'none';
+    document.getElementById('btnExport').style.display = 'none';
+
+    switch (currentStep) {
+        case STEP_ANNOTATE:
+            console.log('show annotate')
+            document.getElementById('btnAnnotationsDone').style.display = 'inline-block';
+            break;
+
+        case STEP_CONFIRM:
+            console.log('show confirm')
+            document.getElementById('btnExport').style.display = 'inline-block';
+            break;
+    }
 }
 
-function setSelectedState() {
-    updateStepMessage('Annotate regions...');
-}
 
-function setAnnotatedState() {
-    updateStepMessage('Check correct items have been matched?');
+/***
+ * Changes the current status with the step number. Updates the step's
+ * message for the user as well.
+ */
+function updateStepText() {
+    console.log('step', currentStep);
+    console.log(stepNoElement);
+    stepNoElement.innerText = currentStep.toString();
+    console.log('text', STEPS[currentStep]);
+    stepTextElement.innerText = STEPS[currentStep];
+    showActions();
 }
 
 
@@ -22,15 +56,58 @@ function setAnnotatedState() {
  */
 chrome.runtime.onMessage.addListener(function(request) {
     switch (request.type) {
-        case 'SELECTED':
-            setSelectedState();
+        case 'STEP_NEXT':
+            currentStep += 1;
+            updateStepText();
             break;
 
-        case 'ANNOTATED':
-            setAnnotatedState();
+        case 'STEP_PREV':
+            currentStep -= 1;
+            updateStepText();
             break;
-
-        default:
-            console.log('Request type not recognised: ', request);
     }
+});
+
+
+/**
+ * Alerts the extension that the user is closing and cancelling the session.
+ */
+document.getElementById('btnClose').addEventListener('click', function () {
+    if (confirm('Are you sure you want to cancel this recording?')) {
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            chrome.tabs.sendMessage(
+                tabs[0].id, {
+                type: 'STOP_RECORDING'
+            });
+        });
+    }
+});
+
+
+/**
+ * Let's the app tab know that we need to move to the confirmation step now.
+ */
+document.getElementById('btnAnnotationsDone').addEventListener('click', function () {
+    currentStep += 1;
+    updateStepText();
+
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        chrome.tabs.sendMessage(
+            tabs[0].id, {
+                type: 'STEP_CONFIRM'
+            });
+    });
+});
+
+
+/**
+ * Let's the app tab know that we need to move to the confirmation step now.
+ */
+document.getElementById('btnExport').addEventListener('click', function () {
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        chrome.tabs.sendMessage(
+            tabs[0].id, {
+                type: 'STEP_EXPORT'
+            });
+    });
 });

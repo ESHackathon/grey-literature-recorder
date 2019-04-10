@@ -12,8 +12,48 @@ body {
     padding: 8px 12px;
 }
 
-.step-message {
-    border-top: 1px solid #444;
-    border-bottom: 1px solid #444;
+.title img {
+    width: 18px;
+    height: 18px;
+    vertical-align: middle;
+}
+
+.title img.icon-record {
+    margin-right: 4px;
+}
+
+.title img.icon-close {
+    float: right;
+    cursor: pointer;
+}
+
+.step {
+    background: #444444;
+    border-top: 1px solid #2f2f2f;
+    border-bottom: 1px solid #595959;
+    font-size: 18px;
     padding: 8px 12px;
+    text-align: center;
+}
+
+.step-number {
+    background: #eeeeee;
+    color: #222222;
+    display: inline-block;
+    -webkit-border-radius: 100%;
+    -moz-border-radius: 100%;
+    border-radius: 100%;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+    margin: 0 0 10px;
+}
+
+.actions {
+    padding: 16px 12px;
+    text-align: center;
+}
+
+.btn {
+    display: none;
 }
