@@ -1,12 +1,16 @@
 'use strict'
 
-const STEP_SELECT_ELEMENT = 1;
-const STEP_ANNOTATE = 2;
-const STEP_CONFIRM = 3;
+const STEP_SEARCH_INPUT = 1;
+const STEP_SELECT_ELEMENT = 2;
+const STEP_ANNOTATE = 3;
+const STEP_PAGER = 4
+const STEP_CONFIRM = 5;
 const STEPS = {}
 
+STEPS[STEP_SEARCH_INPUT] = 'Select search string input.';
 STEPS[STEP_SELECT_ELEMENT] = 'Select the first element from the list of results.';
 STEPS[STEP_ANNOTATE] = 'Click on elements within your selected item to annotate them.';
+STEPS[STEP_PAGER] = 'Select the pager.';
 STEPS[STEP_CONFIRM] = 'Check correct items have been matched?';
 
 const stepNoElement = document.getElementById('stepNo');
@@ -24,12 +28,10 @@ function showActions() {
 
     switch (currentStep) {
         case STEP_ANNOTATE:
-            console.log('show annotate')
             document.getElementById('btnAnnotationsDone').style.display = 'inline-block';
             break;
 
         case STEP_CONFIRM:
-            console.log('show confirm')
             document.getElementById('btnExport').style.display = 'inline-block';
             break;
     }
@@ -41,10 +43,7 @@ function showActions() {
  * message for the user as well.
  */
 function updateStepText() {
-    console.log('step', currentStep);
-    console.log(stepNoElement);
     stepNoElement.innerText = currentStep.toString();
-    console.log('text', STEPS[currentStep]);
     stepTextElement.innerText = STEPS[currentStep];
     showActions();
 }
@@ -94,7 +93,7 @@ document.getElementById('btnAnnotationsDone').addEventListener('click', function
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
         chrome.tabs.sendMessage(
             tabs[0].id, {
-                type: 'STEP_CONFIRM'
+                type: 'STEP_PAGER'
             });
     });
 });

@@ -1,5 +1,11 @@
 'use strict'
 
+const STEP_SEARCH_INPUT = 1;
+const STEP_SELECT_ELEMENT = 2;
+const STEP_ANNOTATE = 3;
+const STEP_PAGER = 4
+const STEP_CONFIRM = 5;
+
 const IFRAME_ID = 'crx_glsr_ui';
 const CLOSE_BTN_ID = 'crx_glsr_close';
 const CLOSE_BTN_IMG_ID = 'crx_glsr_close_img';
@@ -11,11 +17,13 @@ const MOUSE_SELECTED_ALT_CLASSNAME = 'crx_glsr_selected_alt';
 const ANNOTATE_HOVERED_CLASSNAME = 'crx_glsr_annotate_hovered';
 const ANNOTATED_CLASSNAME = 'crx_glsr_annotated';
 
+let searchString = '';
 let selectedElement = null;
+let pagerElement = null;
 let annotations = [];
 let frameUI = null;
-let isRecording = false;
-let isConfirming = false;
+let step = STEP_SEARCH_INPUT;
+let start = false;
 
 
 /**
@@ -36,8 +44,12 @@ function removeClass(className) {
  * Clear the current selection.
  */
 function clearSelections() {
+    searchString = '';
     selectedElement = null;
+    pagerElement = null;
     annotations = [];
+    step = STEP_SEARCH_INPUT;
+    start = false;
 
     // Remove all hovered classes.
     removeClass(MOUSE_HOVERED_CLASSNAME);
@@ -47,6 +59,10 @@ function clearSelections() {
 
     // Remove all selected match classes.
     removeClass(MOUSE_SELECTED_ALT_CLASSNAME);
+
+    // Remove all annotated classes.
+    removeClass(ANNOTATE_HOVERED_CLASSNAME);
+    removeClass(ANNOTATED_CLASSNAME);
 }
 
 
@@ -64,14 +80,14 @@ function highlightSimilarElements() {
         .replace(MOUSE_HOVERED_CLASSNAME, '')
         .trim();
 
-    removeClass(MOUSE_SELECTED_ALT_CLASSNAME);
+    // removeClass(MOUSE_SELECTED_ALT_CLASSNAME);
 
     for (let elem of document.getElementsByClassName(className)) {
         if (elem.classList.contains(MOUSE_SELECTED_CLASSNAME)) {
             continue;
         }
 
-        elem.classList.add(MOUSE_SELECTED_ALT_CLASSNAME)
+        elem.classList.add(MOUSE_SELECTED_CLASSNAME)
     }
 }
 
@@ -83,17 +99,31 @@ function showUI() {
     frameUI.id = IFRAME_ID;
     frameUI.name = IFRAME_ID;
     frameUI.src = appUrl;
-    frameUI.style = "position: fixed; user-select: none; top: 12px; right: 12px; bottom: initial; left: initial; width: 320px; height: 194px; border: 0px; z-index: 2147483646; clip: auto; display: block !important;"
+    frameUI.style = "position: fixed; user-select: none; top: 12px; right: 12px; bottom: initial; left: initial; " +
+        "width: 320px; height: 194px; border: 0px; z-index: 2147483646; clip: auto; display: block !important;"
     document.body.appendChild(frameUI);
 }
 
 
 function hideUI() {
+    clearSelections();
+
     if (frameUI === null) {
         return;
     }
 
     document.body.removeChild(frameUI);
+}
+
+
+function selectSearchString(e) {
+    e.target.blur();
+    searchString = e.target.value;
+    step = STEP_SELECT_ELEMENT;
+
+    chrome.runtime.sendMessage( {
+        type: 'STEP_NEXT'
+    });
 }
 
 
@@ -111,12 +141,25 @@ function selectBaseElement(e) {
     selectedElement.classList.remove(MOUSE_HOVERED_CLASSNAME);
     selectedElement.classList.add(MOUSE_SELECTED_CLASSNAME);
 
-    chrome.runtime.sendMessage( {
+    step = STEP_ANNOTATE;
+
+    chrome.runtime.sendMessage({
         type: 'STEP_NEXT'
     });
 
     showVeil();
 }
+
+
+function selectPagerElement(e) {
+    pagerElement = e.target;
+    step = STEP_CONFIRM;
+
+    chrome.runtime.sendMessage({
+        type: 'STEP_NEXT'
+    });
+}
+
 
 function showVeil() {
     const closeBtnUrl = chrome.runtime.getURL('../img/icon_close.svg');
@@ -169,33 +212,85 @@ function hideVeil() {
 
 
 function showExport() {
+    if (!start) return;
+
+    const data = {
+        date: new Date().toISOString(),
+        url: window.location.href,
+        searchTerm: searchString,
+        data: []
+    };
+
+    const elements = document.getElementsByClassName(MOUSE_SELECTED_CLASSNAME);
+    data.data = Array.prototype.map.call(elements, function(element) {
+        const elemData = {
+            links: []
+        };
+
+        annotations.forEach(function (annotation) {
+            const className = annotation['className']
+                .replace(ANNOTATED_CLASSNAME, '')
+                .trim();
+            const annotatedElements = element.getElementsByClassName(className);
+
+            if (annotatedElements.length > 0) {
+                const annotatedElement = annotatedElements[0]
+                elemData[annotation['title']] = annotatedElement.innerText;
+
+                if (annotatedElement.tagName === 'A') {
+                    elemData.links.push(annotatedElement.href);
+                }
+            }
+        });
+
+        return elemData;
+    });
+
+    console.log(data);
+
     hideVeil();
     clearSelections();
     hideUI();
 
-    const exprtUrl = chrome.runtime.getURL('../img/export.jpg');
-
-    const exportImg = document.createElement('img');
-    exportImg.classList.add('export-img');
-    exportImg.src = exprtUrl;
-
-    document.body.appendChild(exportImg);
+    // const exprtUrl = chrome.runtime.getURL('../img/export.jpg');
+    //
+    // const exportImg = document.createElement('img');
+    // exportImg.classList.add('export-img');
+    // exportImg.src = exprtUrl;
+    //
+    // document.body.appendChild(exportImg);
 }
 
 /**
  * Highlights the current div that the mouse pointer is hovering over.
  */
 document.addEventListener('mousemove', function (e) {
-    if (!isRecording  || isConfirming || e.target.classList.contains(VEIL_CLASSNAME)) {
+    if (!start || e.target.classList.contains(VEIL_CLASSNAME)) {
         return;
     }
 
-    if (selectedElement === null) {
-        removeClass(MOUSE_HOVERED_CLASSNAME);
-        e.target.classList.add(MOUSE_HOVERED_CLASSNAME);
-    } else {
-        removeClass(ANNOTATED_CLASSNAME);
-        e.target.classList.add(ANNOTATED_CLASSNAME);
+    switch (step) {
+        case STEP_SEARCH_INPUT:
+            removeClass(MOUSE_HOVERED_CLASSNAME);
+
+            if (e.target.tagName === 'INPUT') {
+                e.target.classList.add(MOUSE_HOVERED_CLASSNAME);
+            }
+            break;
+
+        case STEP_SELECT_ELEMENT:
+            removeClass(MOUSE_HOVERED_CLASSNAME);
+            e.target.classList.add(MOUSE_HOVERED_CLASSNAME);
+            break;
+
+        case STEP_ANNOTATE:
+            removeClass(ANNOTATED_CLASSNAME);
+            e.target.classList.add(ANNOTATED_CLASSNAME);
+            break;
+
+        case STEP_PAGER:
+            removeClass(MOUSE_HOVERED_CLASSNAME);
+            e.target.classList.add(MOUSE_HOVERED_CLASSNAME);
     }
 }, false);
 
@@ -204,7 +299,11 @@ document.addEventListener('mousemove', function (e) {
  * Set the selected state of the clicked element.
  */
 document.addEventListener('click', function (e) {
-    if (!isRecording) {
+    if (!start || (
+        step !== STEP_SEARCH_INPUT &&
+        step !== STEP_SELECT_ELEMENT &&
+        step !== STEP_ANNOTATE &&
+        step !== STEP_PAGER)) {
         return;
     }
 
@@ -217,11 +316,17 @@ document.addEventListener('click', function (e) {
             type: 'STEP_PREV'
         });
         return;
+    } else if (e.target.tagName === 'A') {
+        e.preventDefault();
     }
 
-    if (selectedElement === null) {
+    if (step === STEP_SEARCH_INPUT && searchString.length === 0) {
+        selectSearchString(e);
+    } else if (step === STEP_SELECT_ELEMENT && selectedElement === null) {
         selectBaseElement(e);
-    } else {
+    } else if (step === STEP_PAGER && pagerElement === null) {
+        selectPagerElement(e);
+    } else if (step === STEP_ANNOTATE ) {
         if (e.target.classList.contains(VEIL_CLASSNAME)) {
             return;
         }
@@ -238,7 +343,6 @@ document.addEventListener('click', function (e) {
             id: e.target.id
         });
         e.target.classList.add(ANNOTATE_HOVERED_CLASSNAME);
-        console.table(annotations);
     }
 });
 
@@ -248,27 +352,33 @@ document.addEventListener('click', function (e) {
  * it.
  */
 chrome.runtime.onMessage.addListener(function(request) {
-    console.log(request.type);
-
     switch (request.type) {
         case 'RECORDING_START_STOP':
-            isRecording = !isRecording;
-            clearSelections();
-            isRecording ? showUI() : hideUI();
-            console.log('isRecording', isRecording);
+            start = !start;
+            step = STEP_SEARCH_INPUT
+            start ? showUI() : hideUI();
             break;
 
+        case 'STOP_RECORDING':
         case 'RECORDING_CANCEL':
             hideVeil();
             clearSelections();
             hideUI();
             break;
 
-        case 'STEP_CONFIRM':
+        case 'STEP_PAGER':
+            step = STEP_PAGER
             if (selectedElement !== null) {
                 hideVeil();
                 highlightSimilarElements();
-                isConfirming = true;
+            }
+            break;
+
+        case 'STEP_CONFIRM':
+            step = STEP_CONFIRM
+            if (selectedElement !== null) {
+                hideVeil();
+                highlightSimilarElements();
             }
             break;
 
@@ -278,12 +388,12 @@ chrome.runtime.onMessage.addListener(function(request) {
     }
 });
 
+
 window.onresize = function() {
-    if (!isRecording) {
+    if (!start) {
         return;
     }
 
     hideVeil();
     showVeil();
 };
-
