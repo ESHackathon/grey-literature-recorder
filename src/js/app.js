@@ -5,15 +5,17 @@ const STEP_SELECT_ELEMENT = 2;
 const STEP_ANNOTATE = 3;
 const STEP_PAGER = 4
 const STEP_CONFIRM = 5;
-const STEP_SAVE = 6;
+const STEP_GETTING_DATA = 6;
+const STEP_SAVE = 7;
 const STEPS = {}
 
 STEPS[STEP_SEARCH_INPUT] = 'Select search string input.';
 STEPS[STEP_SELECT_ELEMENT] = 'Select the first element from the list of results.';
 STEPS[STEP_ANNOTATE] = 'Click on elements within your selected item to annotate them.';
 STEPS[STEP_PAGER] = 'Select the pager.';
-STEPS[STEP_CONFIRM] = 'Check correct items have been matched?';
-STEPS[STEP_SAVE] = 'Stepping through pages...';
+STEPS[STEP_CONFIRM] = 'How many pages should we fetch?';
+STEPS[STEP_GETTING_DATA] = 'Stepping through pages...';
+STEPS[STEP_SAVE] = 'Data collected.';
 
 const stepNoElement = document.getElementById('stepNo');
 const stepTextElement = document.getElementById('stepText');
@@ -28,6 +30,7 @@ function showActions() {
     document.getElementById('btnAnnotationsDone').style.display = 'none';
     document.getElementById('btnGetData').style.display = 'none';
     document.getElementById('btnSave').style.display = 'none';
+    document.getElementById('txtPages').style.display = 'none';
 
     switch (currentStep) {
         case STEP_ANNOTATE:
@@ -35,6 +38,7 @@ function showActions() {
             break;
 
         case STEP_CONFIRM:
+            document.getElementById('txtPages').style.display = 'block';
             document.getElementById('btnGetData').style.display = 'inline-block';
             break;
 
@@ -118,7 +122,8 @@ document.getElementById('btnGetData').addEventListener('click', function () {
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
         chrome.tabs.sendMessage(
             tabs[0].id, {
-                type: 'STEP_GET_DATA'
+                type: 'STEP_GET_DATA',
+                totalPages: document.getElementById('txtPages').value
             });
     });
 });

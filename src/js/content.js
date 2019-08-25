@@ -5,7 +5,8 @@ const STEP_SELECT_ELEMENT = 2;
 const STEP_ANNOTATE = 3;
 const STEP_PAGER = 4
 const STEP_CONFIRM = 5;
-const STEP_SAVE = 6;
+const STEP_GETTING_DATA = 6;
+const STEP_SAVE = 7;
 
 const IFRAME_ID = 'crx_glsr_ui';
 const CLOSE_BTN_ID = 'crx_glsr_close';
@@ -127,6 +128,21 @@ function removeClass(className) {
 
 
 /**
+ * Clears the browser storage items created.
+ */
+function clearStorage() {
+    localStorage.removeItem('className');
+    localStorage.removeItem('pagerClass');
+    localStorage.removeItem('pagerId');
+    localStorage.removeItem('annotations');
+    localStorage.removeItem('totalPages');
+    localStorage.removeItem('data');
+    localStorage.removeItem('currentPage');
+    localStorage.removeItem('nextUrl');
+}
+
+
+/**
  * Clear the current selection.
  */
 function clearSelections() {
@@ -193,6 +209,7 @@ function showUI() {
 
 function hideUI() {
     clearSelections();
+    clearStorage();
 
     if (frameUI === null) {
         return;
@@ -220,6 +237,7 @@ function selectBaseElement(e) {
         alert('Selected item has no "id" or "classes" to distinguished ' +
             'it. It cannot be selected.');
         clearSelections();
+        clearStorage();
         return;
     }
 
@@ -237,9 +255,32 @@ function selectBaseElement(e) {
 }
 
 
-function selectPagerElement(e) {
-    pagerElement = e.target;
+function selectPagerElement(elem, first) {
+    const pagerId = elem.id;
+    let pagerClass = elem.className;
+
+    pagerClass = pagerClass
+        .replace(MOUSE_HOVERED_CLASSNAME, '')
+        .replace(MOUSE_SELECTED_CLASSNAME, '')
+
+    if (pagerId === '' && pagerClass === '' && first)
+    {
+        if (elem.parentElement && (elem.parentElement.id !== '' || elem.parentElement.className !== '')) {
+            selectPagerElement(elem.parentElement, false);
+            return;
+        } else if (elem.childNodes.length > 0 && (elem.childNodes[0].id !== '' || elem.childNodes[0].className !== '')) {
+            selectPagerElement(elem.childNodes[0], false);
+            return;
+        }
+    } else if (pagerId === '' && pagerClass === '' && !first) {
+        alert('The pager has no discernible ID or Class names. You will have do to each page manually.')
+    }
+
+    pagerElement = elem;
     step = STEP_CONFIRM;
+
+    localStorage.setItem('pagerId', pagerId);
+    localStorage.setItem('pagerClass', pagerClass);
 
     chrome.runtime.sendMessage({
         type: 'STEP_NEXT'
@@ -300,15 +341,22 @@ function hideVeil() {
 function getNextPageURL() {
     if (!start) return;
 
-    let currentPage = localStorage.getItem("currentPage")
+    const totalPages = parseInt(localStorage.getItem('totalPages'));
+    let currentPage = localStorage.getItem('currentPage');
     let next = false;
 
     if (!currentPage) {
         currentPage = 1;
+    } else {
+        currentPage = parseInt(currentPage);
+    }
+
+    if (currentPage > totalPages) {
+        return null;
     }
 
     if (pagerElement === null) {
-        return;
+        return null;
     }
 
     for (let elem of pagerElement.getElementsByTagName('a')) {
@@ -319,7 +367,7 @@ function getNextPageURL() {
         }
 
         if (next) {
-            localStorage.setItem("currentPage", page);
+            localStorage.setItem('currentPage', page);
             return elem.getAttribute('href');
         }
     }
@@ -331,7 +379,7 @@ function getNextPageURL() {
 function getData() {
     if (!start) return;
 
-    let data = localStorage.getItem("data");
+    let data = localStorage.getItem('data');
 
     if (data === null) {
         data = {
@@ -371,13 +419,16 @@ function getData() {
     });
 
     data.data.push(...newData);
-
     const nextUrl = getNextPageURL();
 
     if (nextUrl !== null && nextUrl !== undefined) {
         localStorage.setItem('data', JSON.stringify(data));
         localStorage.setItem('nextUrl', nextUrl);
         window.location.href = nextUrl;
+    } else {
+        chrome.runtime.sendMessage({
+            type: 'STEP_NEXT'
+        });
     }
 }
 
@@ -385,12 +436,18 @@ function getData() {
 function checkContinue() {
     const nextUrl = localStorage.getItem('nextUrl');
     const className = localStorage.getItem('className');
+    const pagerId = localStorage.getItem('pagerId');
+    const pagerClass = localStorage.getItem('pagerClass');
     const currentUrl = window.location.pathname + window.location.search;
 
     if (nextUrl === currentUrl) {
         start = true;
-        step = STEP_SAVE;
+        step = STEP_GETTING_DATA;
 
+        // Annotations
+        annotations = JSON.parse(localStorage.getItem('annotations'));
+
+        // Select items from the results list.
         for (let elem of document.getElementsByClassName(className)) {
             if (elem.classList.contains(MOUSE_SELECTED_CLASSNAME)) {
                 continue;
@@ -399,11 +456,20 @@ function checkContinue() {
             elem.classList.add(MOUSE_SELECTED_CLASSNAME);
         }
 
-        localStorage.setItem('className', className);
+        // Select the pager element.
+        if (pagerId !== '') {
+            pagerElement = document.getElementById(pagerId);
+        } else if (pagerClass !== '') {
+            pagerElement = document.getElementsByClassName(pagerClass);
+
+            if (pagerElement.length > 0) {
+                pagerElement = pagerElement[0];
+            }
+        }
 
         showUI();
 
-        chrome.runtime.sendMessage( {
+        chrome.runtime.sendMessage({
             type: 'SET_STEP',
             step: step
         });
@@ -442,7 +508,6 @@ function createFiles(data) {
     saveAs(blob, 'grey_lit_recorder_session_' + utc + '.csv');
 
     hideVeil();
-    clearSelections();
     hideUI();
 }
 
@@ -497,6 +562,8 @@ document.addEventListener('click', function (e) {
     if (e.target.id === CLOSE_BTN_ID || e.target.id === CLOSE_BTN_IMG_ID) {
         hideVeil();
         clearSelections();
+        clearStorage();
+
         chrome.runtime.sendMessage( {
             type: 'STEP_PREV'
         });
@@ -510,7 +577,7 @@ document.addEventListener('click', function (e) {
     } else if (step === STEP_SELECT_ELEMENT && selectedElement === null) {
         selectBaseElement(e);
     } else if (step === STEP_PAGER && pagerElement === null) {
-        selectPagerElement(e);
+        selectPagerElement(e.target, true);
     } else if (step === STEP_ANNOTATE ) {
         if (e.target.classList.contains(VEIL_CLASSNAME)) {
             return;
@@ -527,7 +594,7 @@ document.addEventListener('click', function (e) {
             className: e.target.className,
             id: e.target.id
         });
-        localStorage.setItem('annotations', annotations);
+        localStorage.setItem('annotations', JSON.stringify(annotations));
         e.target.classList.add(ANNOTATE_HOVERED_CLASSNAME);
     }
 });
@@ -548,7 +615,6 @@ chrome.runtime.onMessage.addListener(function(request) {
         case 'STOP_RECORDING':
         case 'RECORDING_CANCEL':
             hideVeil();
-            clearSelections();
             hideUI();
             break;
 
@@ -569,6 +635,7 @@ chrome.runtime.onMessage.addListener(function(request) {
             break;
 
         case 'STEP_GET_DATA':
+            localStorage.setItem('totalPages', request.totalPages);
             getData();
             break;
 

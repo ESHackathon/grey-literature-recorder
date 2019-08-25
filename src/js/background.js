@@ -15,7 +15,9 @@ chrome.browserAction.onClicked.addListener(function(tab) {
  *
  */
 chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
-    chrome.tabs.sendMessage(tabId, {
-        type: 'RECORDING_CONTINUE'
-    });
+    if (changeInfo.status === 'complete') {
+        chrome.tabs.sendMessage(tabId, {
+            type: 'RECORDING_CONTINUE'
+        });
+    }
 });
