@@ -5,6 +5,7 @@ const STEP_SELECT_ELEMENT = 2;
 const STEP_ANNOTATE = 3;
 const STEP_PAGER = 4
 const STEP_CONFIRM = 5;
+const STEP_SAVE = 6;
 
 const IFRAME_ID = 'crx_glsr_ui';
 const CLOSE_BTN_ID = 'crx_glsr_close';
@@ -24,6 +25,91 @@ let annotations = [];
 let frameUI = null;
 let step = STEP_SEARCH_INPUT;
 let start = false;
+
+/**
+ * Gets the environment details.
+ */
+function getEnvironment() {
+    // **
+    // * Get OS details.
+    // **
+    let osName = '';
+
+    if (navigator.appVersion.indexOf("Win")!=-1) osName="Windows";
+    else if (navigator.appVersion.indexOf("Mac")!=-1) osName="MacOS";
+    else if (navigator.appVersion.indexOf("X11")!=-1) osName="UNIX";
+    else if (navigator.appVersion.indexOf("Linux")!=-1) osName="Linux";
+
+    // **
+    // * Get Browser details.
+    // **
+    let nVer = navigator.appVersion;
+    let nAgt = navigator.userAgent;
+    let browserName  = navigator.appName;
+    let fullVersion  = ''+parseFloat(navigator.appVersion);
+    let majorVersion = parseInt(navigator.appVersion,10);
+    let nameOffset, verOffset, ix;
+
+    if ((verOffset=nAgt.indexOf("Opera")) !== -1) {
+        browserName = "Opera";
+        fullVersion = nAgt.substring(verOffset+6);
+        if ((verOffset=nAgt.indexOf("Version")) !== -1)
+            fullVersion = nAgt.substring(verOffset+8);
+    }
+    // In MSIE, the true version is after "MSIE" in userAgent
+    else if ((verOffset=nAgt.indexOf("MSIE")) !== -1) {
+        browserName = "Microsoft Internet Explorer";
+        fullVersion = nAgt.substring(verOffset+5);
+    }
+    // In Chrome, the true version is after "Chrome"
+    else if ((verOffset=nAgt.indexOf("Chrome")) !== -1) {
+        browserName = "Chrome";
+        fullVersion = nAgt.substring(verOffset+7);
+    }
+    // In Safari, the true version is after "Safari" or after "Version"
+    else if ((verOffset=nAgt.indexOf("Safari")) !== -1) {
+        browserName = "Safari";
+        fullVersion = nAgt.substring(verOffset+7);
+
+        if ((verOffset=nAgt.indexOf("Version")) !== -1)
+            fullVersion = nAgt.substring(verOffset+8);
+    }
+    // In Firefox, the true version is after "Firefox"
+    else if ((verOffset=nAgt.indexOf("Firefox")) !== -1) {
+        browserName = "Firefox";
+        fullVersion = nAgt.substring(verOffset+8);
+    }
+    // In most other browsers, "name/version" is at the end of userAgent
+    else if ((nameOffset=nAgt.lastIndexOf(' ') + 1) < (verOffset = nAgt.lastIndexOf('/')))
+    {
+        browserName = nAgt.substring(nameOffset,verOffset);
+        fullVersion = nAgt.substring(verOffset + 1);
+
+        if (browserName.toLowerCase() === browserName.toUpperCase()) {
+            browserName = navigator.appName;
+        }
+    }
+    // trim the fullVersion string at semicolon/space if present
+    if ((ix=fullVersion.indexOf(";")) !== -1)
+        fullVersion=fullVersion.substring(0,ix);
+    if ((ix=fullVersion.indexOf(" ")) !== -1)
+        fullVersion=fullVersion.substring(0,ix);
+
+    majorVersion = parseInt('' + fullVersion,10);
+    if (isNaN(majorVersion)) {
+        fullVersion  = '' + parseFloat(navigator.appVersion);
+        majorVersion = parseInt(navigator.appVersion,10);
+    }
+
+    return {
+        osName,
+        browserName,
+        fullVersion,
+        majorVersion,
+        appName: navigator.appName,
+        userAgent: navigator.userAgent
+    }
+}
 
 
 /**
@@ -80,15 +166,15 @@ function highlightSimilarElements() {
         .replace(MOUSE_HOVERED_CLASSNAME, '')
         .trim();
 
-    // removeClass(MOUSE_SELECTED_ALT_CLASSNAME);
-
     for (let elem of document.getElementsByClassName(className)) {
         if (elem.classList.contains(MOUSE_SELECTED_CLASSNAME)) {
             continue;
         }
 
-        elem.classList.add(MOUSE_SELECTED_CLASSNAME)
+        elem.classList.add(MOUSE_SELECTED_CLASSNAME);
     }
+
+    localStorage.setItem('className', className);
 }
 
 
@@ -211,18 +297,56 @@ function hideVeil() {
 }
 
 
-function showExport() {
+function getNextPageURL() {
     if (!start) return;
 
-    const data = {
-        date: new Date().toISOString(),
-        url: window.location.href,
-        searchTerm: searchString,
-        data: []
-    };
+    let currentPage = localStorage.getItem("currentPage")
+    let next = false;
+
+    if (!currentPage) {
+        currentPage = 1;
+    }
+
+    if (pagerElement === null) {
+        return;
+    }
+
+    for (let elem of pagerElement.getElementsByTagName('a')) {
+        const page = parseInt(elem.innerText.trim());
+
+        if (page > currentPage) {
+            next = true;
+        }
+
+        if (next) {
+            localStorage.setItem("currentPage", page);
+            return elem.getAttribute('href');
+        }
+    }
+
+    return null;
+}
+
+
+function getData() {
+    if (!start) return;
+
+    let data = localStorage.getItem("data");
+
+    if (data === null) {
+        data = {
+            date: new Date().toISOString(),
+            url: window.location.href,
+            searchTerm: searchString,
+            environment: getEnvironment(),
+            data: []
+        };
+    } else {
+        data = JSON.parse(data);
+    }
 
     const elements = document.getElementsByClassName(MOUSE_SELECTED_CLASSNAME);
-    data.data = Array.prototype.map.call(elements, function(element) {
+    const newData = Array.prototype.map.call(elements, function(element) {
         const elemData = {
             links: []
         };
@@ -246,19 +370,80 @@ function showExport() {
         return elemData;
     });
 
-    console.log(data);
+    data.data.push(...newData);
+
+    const nextUrl = getNextPageURL();
+
+    if (nextUrl !== null && nextUrl !== undefined) {
+        localStorage.setItem('data', JSON.stringify(data));
+        localStorage.setItem('nextUrl', nextUrl);
+        window.location.href = nextUrl;
+    }
+}
+
+
+function checkContinue() {
+    const nextUrl = localStorage.getItem('nextUrl');
+    const className = localStorage.getItem('className');
+    const currentUrl = window.location.pathname + window.location.search;
+
+    if (nextUrl === currentUrl) {
+        start = true;
+        step = STEP_SAVE;
+
+        for (let elem of document.getElementsByClassName(className)) {
+            if (elem.classList.contains(MOUSE_SELECTED_CLASSNAME)) {
+                continue;
+            }
+
+            elem.classList.add(MOUSE_SELECTED_CLASSNAME);
+        }
+
+        localStorage.setItem('className', className);
+
+        showUI();
+
+        chrome.runtime.sendMessage( {
+            type: 'SET_STEP',
+            step: step
+        });
+
+        getData();
+    }
+}
+
+
+function createFiles(data) {
+    let csvData = '';
+
+    annotations.forEach(function (annotation) {
+        csvData += '"' + annotation['title'] + '",'
+    });
+
+    csvData += '\r\n';
+
+    data.data.forEach(function (data) {
+        annotations.forEach(function (annotation) {
+            let item = data[annotation['title']]
+
+            if (!item) {
+                item = ''
+            } else {
+                item = item.replace(/\r?\n|\r/g, ' ')
+            }
+
+            csvData += '"' + item + '",'
+        });
+        csvData += '\r\n';
+    });
+
+    const utc = new Date().toJSON().slice(0,10).replace(/-/g,'/');
+    const blob = new Blob([csvData], {type: 'text/plain;charset=utf-8'});
+    saveAs(blob, 'grey_lit_recorder_session_' + utc + '.csv');
 
     hideVeil();
     clearSelections();
     hideUI();
-
-    // const exprtUrl = chrome.runtime.getURL('../img/export.jpg');
-    //
-    // const exportImg = document.createElement('img');
-    // exportImg.classList.add('export-img');
-    // exportImg.src = exprtUrl;
-    //
-    // document.body.appendChild(exportImg);
 }
 
 /**
@@ -342,6 +527,7 @@ document.addEventListener('click', function (e) {
             className: e.target.className,
             id: e.target.id
         });
+        localStorage.setItem('annotations', annotations);
         e.target.classList.add(ANNOTATE_HOVERED_CLASSNAME);
     }
 });
@@ -382,8 +568,16 @@ chrome.runtime.onMessage.addListener(function(request) {
             }
             break;
 
-        case 'STEP_EXPORT':
-            showExport()
+        case 'STEP_GET_DATA':
+            getData();
+            break;
+
+        case 'RECORDING_CONTINUE':
+            checkContinue();
+            break;
+
+        case 'STEP_SAVE':
+            createFiles()
             break;
     }
 });

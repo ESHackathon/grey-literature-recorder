@@ -5,6 +5,7 @@ const STEP_SELECT_ELEMENT = 2;
 const STEP_ANNOTATE = 3;
 const STEP_PAGER = 4
 const STEP_CONFIRM = 5;
+const STEP_SAVE = 6;
 const STEPS = {}
 
 STEPS[STEP_SEARCH_INPUT] = 'Select search string input.';
@@ -12,6 +13,7 @@ STEPS[STEP_SELECT_ELEMENT] = 'Select the first element from the list of results.
 STEPS[STEP_ANNOTATE] = 'Click on elements within your selected item to annotate them.';
 STEPS[STEP_PAGER] = 'Select the pager.';
 STEPS[STEP_CONFIRM] = 'Check correct items have been matched?';
+STEPS[STEP_SAVE] = 'Stepping through pages...';
 
 const stepNoElement = document.getElementById('stepNo');
 const stepTextElement = document.getElementById('stepText');
@@ -24,7 +26,8 @@ let currentStep = 1;
  */
 function showActions() {
     document.getElementById('btnAnnotationsDone').style.display = 'none';
-    document.getElementById('btnExport').style.display = 'none';
+    document.getElementById('btnGetData').style.display = 'none';
+    document.getElementById('btnSave').style.display = 'none';
 
     switch (currentStep) {
         case STEP_ANNOTATE:
@@ -32,7 +35,11 @@ function showActions() {
             break;
 
         case STEP_CONFIRM:
-            document.getElementById('btnExport').style.display = 'inline-block';
+            document.getElementById('btnGetData').style.display = 'inline-block';
+            break;
+
+        case STEP_SAVE:
+            document.getElementById('btnSave').style.display = 'inline-block';
             break;
     }
 }
@@ -62,6 +69,11 @@ chrome.runtime.onMessage.addListener(function(request) {
 
         case 'STEP_PREV':
             currentStep -= 1;
+            updateStepText();
+            break;
+
+        case 'SET_STEP':
+            currentStep = request.step;
             updateStepText();
             break;
     }
@@ -102,11 +114,24 @@ document.getElementById('btnAnnotationsDone').addEventListener('click', function
 /**
  * Let's the app tab know that we need to move to the confirmation step now.
  */
-document.getElementById('btnExport').addEventListener('click', function () {
+document.getElementById('btnGetData').addEventListener('click', function () {
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
         chrome.tabs.sendMessage(
             tabs[0].id, {
-                type: 'STEP_EXPORT'
+                type: 'STEP_GET_DATA'
+            });
+    });
+});
+
+
+/**
+ * Let's the app tab know that we need to move to the confirmation step now.
+ */
+document.getElementById('btnSave').addEventListener('click', function () {
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        chrome.tabs.sendMessage(
+            tabs[0].id, {
+                type: 'STEP_SAVE'
             });
     });
 });

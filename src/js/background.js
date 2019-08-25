@@ -10,3 +10,12 @@ chrome.browserAction.onClicked.addListener(function(tab) {
         type: 'RECORDING_START_STOP'
     });
 });
+
+/**
+ *
+ */
+chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
+    chrome.tabs.sendMessage(tabId, {
+        type: 'RECORDING_CONTINUE'
+    });
+});

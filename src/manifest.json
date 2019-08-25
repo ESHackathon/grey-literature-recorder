@@ -37,12 +37,14 @@
     "img/export.jpg",
     "img/icon_close.svg",
     "js/app.js",
+    "js/fileSaver.js",
     "views/app.html"
   ],
   "permissions": [
     "activeTab",
     "declarativeContent",
-    "storage"
+    "storage",
+    "tabs"
   ],
   "content_security_policy": "script-src 'self' https://www.gstatic.com/; object-src 'self'"
 }
