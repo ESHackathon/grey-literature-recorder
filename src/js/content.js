@@ -561,6 +561,7 @@ function getData() {
             links: []
         };
 
+        // Get all annotations.
         annotations.forEach(function (annotation) {
             const className = annotation['className']
                 .replace(ANNOTATED_CLASSNAME, '')
@@ -570,10 +571,15 @@ function getData() {
             if (annotatedElements.length > 0) {
                 const annotatedElement = annotatedElements[0]
                 elemData[annotation['title']] = annotatedElement.innerText;
+            }
+        });
 
-                if (annotatedElement.tagName === 'A') {
-                    elemData.links.push(annotatedElement.href);
-                }
+        // Get all links.
+        const links = element.querySelectorAll('a');
+        links.forEach(function(link) {
+            if (elemData.links.indexOf(link.href) < 0 && !link.href.startsWith('javascript'))
+            {
+                elemData.links.push(link.href);
             }
         });
 
@@ -651,6 +657,7 @@ function createFiles() {
 
     const data = JSON.parse(localStorage.getItem('data'))
     data.data.forEach(function (data) {
+        // Add annotations to the file.
         annotations.forEach(function (annotation) {
             let item = data[annotation['title']]
 
@@ -662,12 +669,24 @@ function createFiles() {
 
             csvData += '"' + item + '"\t'
         });
+
+        // Add links to file.
+        data.links.forEach(function(link) {
+            csvData += '"' + link + '"\t'
+        })
+
         csvData += '\r\n';
     });
 
     const utc = new Date().toJSON().slice(0,10).replace(/-/g,'/');
+
+    // Save CSV File
     const csvBlob = new Blob([csvData], {type: 'text/plain;charset=utf-8'});
     saveAs(csvBlob, 'grey_lit_recorder_session_' + utc + '.csv');
+
+    // Save JSON File
+    const jsonBlob = new Blob([JSON.stringify(data.data)], {type: 'text/plain;charset=utf-8'});
+    saveAs(jsonBlob, 'grey_lit_recorder_session_' + utc + '.json');
 
     // Create Text File
     let text = '';
